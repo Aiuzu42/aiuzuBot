@@ -61,7 +61,7 @@ func GetLivestreamIdFromChannelId(u string, l *log.Logger) ([]string, error) {
 	}
 	var details ChannelLiveStreamDetails
 	errD := json.NewDecoder(r.Body).Decode(&details)
-	if err != nil {
+	if errD != nil {
 		l.Println(errD.Error())
 		return nil, ErrorDecoding
 	}
@@ -90,7 +90,7 @@ func GetLiveChatIdFromLiveStreamId(s string, l *log.Logger) (string, error) {
 	}
 	var details *LiveStreamDetails
 	errD := json.NewDecoder(r.Body).Decode(&details)
-	if err != nil {
+	if errD != nil {
 		l.Println(errD.Error())
 		return "", ErrorDecoding
 	}
@@ -104,6 +104,7 @@ func GetFristLiveChatIdFromChannelId(c string, l *log.Logger) (string, error) {
 		return "", err
 	}
 	if len(ids) < 1 {
+		l.Println(ErrorNoActiveLivestreams.Error())
 		return "", ErrorNoActiveLivestreams
 	}
 	liveChatId, err2 := GetLiveChatIdFromLiveStreamId(ids[0], l)
@@ -133,6 +134,7 @@ func PostComment(message string, chatId string, author string, l *log.Logger) er
 
 func ReadMessages(c string, n string, l *log.Logger) (MessageResponse, error) {
 	if c == "" {
+		l.Println(ErrorNilChannelID.Error())
 		return MessageResponse{}, ErrorNilChannelID
 	}
 	if apiKey == "" {
@@ -150,7 +152,7 @@ func ReadMessages(c string, n string, l *log.Logger) (MessageResponse, error) {
 	}
 	var messages MessageResponse
 	errD := json.NewDecoder(r.Body).Decode(&messages)
-	if err != nil {
+	if errD != nil {
 		l.Println(errD.Error())
 		return MessageResponse{}, ErrorDecoding
 	}
@@ -159,6 +161,7 @@ func ReadMessages(c string, n string, l *log.Logger) (MessageResponse, error) {
 
 func GetUserFromChannelId(c string, l *log.Logger) (string, error) {
 	if c == "" {
+		l.Println(ErrorNilChannelID.Error())
 		return "", ErrorNilChannelID
 	}
 	if apiKey == "" {
@@ -167,21 +170,20 @@ func GetUserFromChannelId(c string, l *log.Logger) (string, error) {
 	}
 	urlGet := urlGetUser + url.QueryEscape(apiKey)
 	urlGet = strings.Replace(urlGet, "#UID", url.QueryEscape(c), 1)
-	l.Println(urlGet)
 	r, err := doGet(urlGet, l)
 	if err != nil {
 		return "", err
 	}
 	var user UserFromChannelResponse
 	errD := json.NewDecoder(r.Body).Decode(&user)
-	if err != nil {
+	if errD != nil {
 		l.Println(errD.Error())
 		return "", ErrorDecoding
 	}
-	if len(user.Items) < 1 {
+	if len(user.Items) == 0 {
+		l.Println("The user was not found.")
 		return "", ErrorNotFound
 	}
-	l.Println(user.Items[0].Snippet.Local.Title)
 	return user.Items[0].Snippet.Local.Title, nil
 }
 
@@ -195,14 +197,22 @@ func GetNewAuthToken(cId string, cSec string, ref string, l *log.Logger) (string
 		return "", err
 	}
 	var token TokenResponse
-	json.NewDecoder(res.Body).Decode(&token)
+	errD := json.NewDecoder(res.Body).Decode(&token)
+	if errD != nil {
+		l.Println(errD.Error())
+		return "", ErrorDecoding
+	}
 	return token.Token, nil
 }
 
 func doGet(u string, l *log.Logger) (*http.Response, error) {
 	r, err := http.Get(u)
-	if err != nil || r.StatusCode != 200 {
+	if err != nil {
 		l.Println(err.Error())
+		return nil, ErrorApiCall
+	} else if r.StatusCode != 200 {
+		bs, _ := ioutil.ReadAll(r.Body)
+		l.Println(string(bs))
 		return nil, ErrorApiCall
 	} else {
 		return r, nil

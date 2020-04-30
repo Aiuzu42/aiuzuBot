@@ -42,26 +42,22 @@ func (b *Bot) Loop() {
 	b.timer = time.Now().Unix()
 	for !b.deactivate {
 		m, err := youtubeapi.ReadMessages(b.ChatId, next, b.logTo)
-		if m.Info.Total > 50 {
-			b.logTo.Println("Too many messages, nothing to do this cycle")
-			next = m.Next
-			time.Sleep(10 * time.Second)
-			continue
-		}
 		if err != nil {
 			b.logTo.Println("There was an error attempting to read messages.")
-			continue
-		}
-		next = m.Next
-		for _, mi := range m.Messages {
-			logMessage(mi, b.logTo)
-			for i := range b.actions {
-				if b.actions[i].findKeyword(mi.Snippet.DisplayMessage) {
-					errA := b.actions[i].ExecuteAction(mi.Snippet.Author, b.ChatId, b.Author, mi.Snippet.DisplayMessage, b.logTo)
-					if errA != nil {
-						b.logTo.Println(errA.Error())
+		} else if m.Info.Total > 30 {
+			b.logTo.Println("Too many messages, nothing to do this cycle")
+			next = m.Next
+		} else {
+			next = m.Next
+			for _, mi := range m.Messages {
+				logMessage(mi, b.logTo)
+				for i := range b.actions {
+					if b.actions[i].findKeyword(mi.Snippet.DisplayMessage) {
+						errA := b.actions[i].ExecuteAction(mi.Snippet.Author, b.ChatId, b.Author, mi.Snippet.DisplayMessage, b.logTo)
+						if errA != nil {
+							b.logTo.Println("Error executing action")
+						}
 					}
-					continue
 				}
 			}
 		}
@@ -90,7 +86,6 @@ func (b *Bot) postTimedAction() error {
 	err := youtubeapi.PostComment(msg, b.ChatId, b.Author, b.logTo)
 	if err != nil {
 		b.logTo.Println("Error posting timed action")
-		b.logTo.Println(err.Error())
 		return err
 	}
 	return nil

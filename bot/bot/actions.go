@@ -31,29 +31,34 @@ type Action struct {
 }
 
 func (a *Action) ExecuteAction(userId string, chat string, author string, msg string, l *log.Logger) error {
+	//First we validate if the user isnt excluded, has permission and the command isnt in timeout
 	if utils.IsExcluded(userId) {
 		return nil
 	}
 	if a.Admin && !utils.IsAdmin(userId) {
 		l.Printf("User: %s attempted to execute command %s without authorization", userId, a.Name)
-		return ErrNotAuthorized //TODO post comment about it? or just dont do it?
+		return ErrNotAuthorized
 	} else if a.Admin && utils.IsAdmin(userId) {
-		l.Printf("User: %s executed the admin command %s", userId, a.Name)
+		l.Printf("User: %s is executing the admin command %s", userId, a.Name)
 	}
-	if errT := a.validateTimeout(userId, time.Now().Unix()); errT != nil {
-		//youtubeapi.PostComment(errT.Error(), chat, author, l)
-		l.Println(errT.Error())
+	if errT := a.validateTimeout(userId, time.Now().Unix(), l); errT != nil {
 		return nil
 	}
+
+	//Here we select the type of action and execute it
 	switch a.Type {
 	case "response":
-		a.ResponseAction(userId, chat, author, l)
+		errR := a.ResponseAction(userId, chat, author, l)
+		if errR != nil {
+			return errR
+		}
 	case "setupgame":
 		a.SetUpGameAction(msg)
-		return nil
 	default:
 		return ErrActionTypeNotFound
 	}
+
+	//We register this call to the command to lastCalled globally and by user
 	a.LastCalled = time.Now().Unix()
 	if a.UserList == nil {
 		a.UserList = make(map[string]int64)
@@ -70,13 +75,14 @@ func (a *Action) ResponseAction(userId string, chat string, author string, l *lo
 			var errU error
 			uname, errU = youtubeapi.GetUserFromChannelId(userId, l)
 			if errU != nil {
-				uname = "Virigamer!"
+				uname = "virigamer!"
 			} else {
 				utils.AddToUsers(userId, uname)
 			}
 		}
 		r = strings.ReplaceAll(r, "{user}", uname)
-	} else if strings.Contains(r, "{game}") {
+	}
+	if strings.Contains(r, "{game}") {
 		r = strings.ReplaceAll(r, "{game}", utils.Game)
 	}
 	err := youtubeapi.PostComment(r, chat, author, l)
@@ -96,17 +102,18 @@ func remainingTimeout(now int64, timeout int64, last int64) int64 {
 	}
 }
 
-func (a *Action) validateTimeout(user string, now int64) error {
+func (a *Action) validateTimeout(user string, now int64, l *log.Logger) error {
 	global := remainingTimeout(now, a.GlobalTimeout, a.LastCalled)
 	if global > 0 {
-		e := fmt.Sprintf("%d seconds remaining to user %s command again[global].", global, a.Name)
+		e := fmt.Sprintf("%d seconds remaining to use %s command again[global].", global, a.Name)
+		l.Println(e)
 		return errors.New(e)
 	}
 	ut := a.UserList[user]
 	timeUser := remainingTimeout(now, a.UserTimeout, ut)
 	if timeUser > 0 {
-		//TODO personalizar por nombre de usuario
-		e := fmt.Sprintf("%d seconds remaining to user %s command again[user].", global, a.Name)
+		e := fmt.Sprintf("%s has %d seconds remaining to use %s command again[user].", user, global, a.Name)
+		l.Println(e)
 		return errors.New(e)
 	}
 	return nil

@@ -59,13 +59,11 @@ func setupBot(l *log.Logger) bot.Bot {
 	youtubeapi.SetApiKey(config.Configuration.ApiKey)
 	token, err := youtubeapi.GetNewAuthToken(config.Configuration.ClientId, config.Configuration.ClientS, config.Configuration.Refresh, l)
 	if err != nil {
-		l.Println(err.Error())
 		l.Fatal("There was a critical error")
 	}
 	youtubeapi.SetToken(token)
 	chatId, err := youtubeapi.GetFristLiveChatIdFromChannelId(config.Configuration.LiveStreamChannelId, l)
 	if err != nil {
-		l.Println(err.Error())
 		l.Fatal("There was a critical error")
 	}
 	for _, e := range config.Actions {
