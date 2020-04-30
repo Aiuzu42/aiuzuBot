@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	Version = "1.0.0"
+	Version = "1.1.0"
 )
 
 var Game = ""
@@ -15,6 +15,8 @@ var admins []string
 var actions = []string{"response", "setupgame"}
 var users = make(map[string]string)
 var quotes = []string{}
+var ThisBot string
+var InitialHello string
 
 func SetAdmins(a []string) {
 	admins = a
@@ -49,8 +51,12 @@ func GetRandomQuote() string {
 	return quotes[rand.Intn(len(quotes))]
 }
 
+func SetQuotes(q []string) {
+	quotes = q
+}
+
 func IsExcluded(userId string) bool {
-	if userId == "" {
+	if userId == ThisBot {
 		return true
 	} else {
 		return false

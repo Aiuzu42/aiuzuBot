@@ -11,6 +11,13 @@ import (
 )
 
 type config struct {
+	Configuration configuration `json:"configuration"`
+	Actions       []bot.Action  `json:"actions"`
+	Quotes        []string      `json:"quotes"`
+	InitialHello  string        `json:"initialHello"`
+}
+
+type configuration struct {
 	ApiKey              string   `json:"apiKey"`
 	Refresh             string   `json:"refresh"`
 	ClientId            string   `json:"clientId"`
@@ -40,40 +47,31 @@ func loadConfig() config {
 	}
 	defer file.Close()
 	json.NewDecoder(file).Decode(&c)
-	utils.SetAdmins(c.Admins)
+	utils.SetAdmins(c.Configuration.Admins)
+	utils.SetQuotes(c.Quotes)
+	utils.InitialHello = c.InitialHello
+	utils.ThisBot = c.Configuration.AuthorId
 	return c
 }
 
 func setupBot(l *log.Logger) bot.Bot {
 	config := loadConfig()
-	youtubeapi.SetApiKey(config.ApiKey)
-	token, err := youtubeapi.GetNewAuthToken(config.ClientId, config.ClientS, config.Refresh, l)
+	youtubeapi.SetApiKey(config.Configuration.ApiKey)
+	token, err := youtubeapi.GetNewAuthToken(config.Configuration.ClientId, config.Configuration.ClientS, config.Configuration.Refresh, l)
 	if err != nil {
 		l.Println(err.Error())
 		l.Fatal("There was a critical error")
 	}
 	youtubeapi.SetToken(token)
-	chatId, err := youtubeapi.GetFristLiveChatIdFromChannelId(config.LiveStreamChannelId, l)
+	chatId, err := youtubeapi.GetFristLiveChatIdFromChannelId(config.Configuration.LiveStreamChannelId, l)
 	if err != nil {
 		l.Println(err.Error())
 		l.Fatal("There was a critical error")
 	}
-	a := readActions(l)
-	return bot.NewBot(config.AuthorId, chatId, a, l)
-}
-
-func readActions(l *log.Logger) []bot.Action {
-	var a []bot.Action
-	file, err := os.Open("actions.json")
-	if err != nil {
-		l.Fatal("Cant load actions file.")
-	}
-	defer file.Close()
-	json.NewDecoder(file).Decode(&a)
-	for _, e := range a {
+	for _, e := range config.Actions {
 		if !utils.ValidateResponseType(e.Type) {
 			l.Fatal("There are invalid action types.")
 		}
 	}
-	return a
+	return bot.NewBot(config.Configuration.AuthorId, chatId, config.Actions, l)
 }

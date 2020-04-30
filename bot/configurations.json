@@ -1,9 +1,24 @@
 {
-    "apiKey" : "",
-    "refresh" : "",
-    "liveStreamChannelId" : "",
-    "authorId" : "",
-    "clientId" : "",
-    "clientS" : "",
-    "admins" : []
+    "configuration" : {
+        "apiKey" : "",
+        "refresh" : "",
+        "liveStreamChannelId" : "",
+        "authorId" : "",
+        "clientId" : "",
+        "clientS" : "",
+        "admins" : []
+    },
+    "actions" : [
+        {
+            "name" : "",
+            "keywords" : [],
+            "type" : "",
+            "message" : "",
+            "userTimeout" : 0,
+            "globalTimeout" : 0,
+            "admin" : false
+        }
+    ],
+    "quotes" : [],
+    "initialHello" : ""
 }

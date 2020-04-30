@@ -24,7 +24,7 @@ func NewBot(a string, c string, act []Action, l *log.Logger) Bot {
 }
 
 func (b *Bot) InitialHello() error {
-	err := youtubeapi.PostComment("Hola, Soy Aiuzu bot", b.ChatId, b.Author, b.logTo)
+	err := youtubeapi.PostComment(utils.InitialHello, b.ChatId, b.Author, b.logTo)
 	if err != nil {
 		return err
 	}
