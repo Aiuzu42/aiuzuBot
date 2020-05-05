@@ -86,5 +86,5 @@ type Localized struct {
 
 type TokenResponse struct {
 	Token      string `json:"access_token"`
-	Expiration string `json:"expires_in"`
+	Expiration int    `json:"expires_in"`
 }

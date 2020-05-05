@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	Version = "1.1.1"
+	Version = "1.1.2"
 )
 
 var Game = ""
@@ -15,7 +15,7 @@ var admins []string
 var actions = []string{"response", "setupgame"}
 var users = make(map[string]string)
 var quotes = []string{}
-var ThisBot string
+var ThisISBot []string
 var InitialHello string
 
 func SetAdmins(a []string) {
@@ -56,9 +56,5 @@ func SetQuotes(q []string) {
 }
 
 func IsExcluded(userId string) bool {
-	if userId == ThisBot {
-		return true
-	} else {
-		return false
-	}
+	return existsInSlice(userId, ThisISBot)
 }

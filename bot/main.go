@@ -25,6 +25,7 @@ type configuration struct {
 	LiveStreamChannelId string   `json:"liveStreamChannelId"`
 	AuthorId            string   `json:"authorId"`
 	Admins              []string `json:"admins"`
+	Excluded            []string `json:"excluded"`
 }
 
 func main() {
@@ -50,7 +51,8 @@ func loadConfig() config {
 	utils.SetAdmins(c.Configuration.Admins)
 	utils.SetQuotes(c.Quotes)
 	utils.InitialHello = c.InitialHello
-	utils.ThisBot = c.Configuration.AuthorId
+	utils.ThisISBot = c.Configuration.Excluded
+	utils.ThisISBot = append(utils.ThisISBot, c.Configuration.AuthorId)
 	return c
 }
 

@@ -134,6 +134,5 @@ func (a *Action) SetUpGameAction(msg string) {
 	}
 	r := []rune(msg)
 	trueName := string(r[7:])
-	log.Println(trueName)
 	utils.Game = trueName
 }
