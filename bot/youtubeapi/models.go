@@ -54,6 +54,7 @@ type PageInfo struct {
 
 type MessageItem struct {
 	Snippet MessageSnippet `json:"snippet"`
+	Id      string         `json:"id"`
 }
 
 type MessageSnippet struct {
@@ -87,4 +88,22 @@ type Localized struct {
 type TokenResponse struct {
 	Token      string `json:"access_token"`
 	Expiration int    `json:"expires_in"`
+}
+
+type BanResource struct {
+	Kind    string     `json:"kind"`
+	Etag    string     `json:"etag"`
+	Id      string     `json:"id"`
+	Snippet BanSnippet `json:"snippet"`
+}
+
+type BanSnippet struct {
+	LiveChatId string            `json:"liveChatId"`
+	Type       string            `json:"type"`
+	Duration   int               `json:"banDurationSeconds"`
+	BannedUser BannedUserDetails `json:"bannedUserDetails"`
+}
+
+type BannedUserDetails struct {
+	ChannelId string `json:"channelId"`
 }

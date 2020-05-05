@@ -6,7 +6,8 @@
         "authorId" : "",
         "clientId" : "",
         "clientS" : "",
-        "admins" : []
+        "admins" : [],
+        "excluded" : []
     },
     "actions" : [
         {
