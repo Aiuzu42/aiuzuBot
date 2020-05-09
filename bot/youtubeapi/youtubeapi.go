@@ -22,9 +22,6 @@ var ErrorNilCommentID error = errors.New("Comment Id not provided")
 var ErrorEncoding error = errors.New("Error encoding data.")
 var ErrUnauthorized error = errors.New("Unauthorized, invalid credentials")
 
-var apiKey string
-var token string
-
 const (
 	urlLivestreamFromChannel = "https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=#UID&eventType=live&type=video&key="
 	urlLiveChatId            = "https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=#UID&key="
@@ -43,29 +40,22 @@ const (
 	permanent_ban            = "permanent"
 )
 
-func SetApiKey(s string) {
-	apiKey = url.QueryEscape(s)
-}
-
-func SetToken(s string) {
-	token = s
-}
-
-func GetLivestreamIdFromChannelId(u string, l *log.Logger) ([]string, error) {
+func GetLivestreamIdFromChannelId(u string, key string, l *log.Logger) ([]string, error) {
 	if u == "" {
 		l.Println(ErrorNilChannelID.Error())
 		return nil, ErrorNilChannelID
 	}
-	if apiKey == "" {
+	if key == "" {
 		l.Println(ErrorNoApiKey.Error())
 		return nil, ErrorNoApiKey
 	}
-	urlGet := urlLivestreamFromChannel + apiKey
+	urlGet := urlLivestreamFromChannel + url.QueryEscape(key)
 	urlGet = strings.Replace(urlGet, "#UID", url.QueryEscape(u), 1)
 	r, err := doGet(urlGet, l)
 	if err != nil {
 		return nil, err
 	}
+	defer r.Body.Close()
 	var details ChannelLiveStreamDetails
 	errD := json.NewDecoder(r.Body).Decode(&details)
 	if errD != nil {
@@ -80,21 +70,22 @@ func GetLivestreamIdFromChannelId(u string, l *log.Logger) ([]string, error) {
 
 }
 
-func GetLiveChatIdFromLiveStreamId(s string, l *log.Logger) (string, error) {
+func GetLiveChatIdFromLiveStreamId(s string, key string, l *log.Logger) (string, error) {
 	if s == "" {
 		l.Println(ErrorNilChannelID.Error())
 		return "", ErrorNilChannelID
 	}
-	if apiKey == "" {
+	if key == "" {
 		l.Println(ErrorNoApiKey.Error())
 		return "", ErrorNoApiKey
 	}
-	urlGet := urlLiveChatId + apiKey
+	urlGet := urlLiveChatId + url.QueryEscape(key)
 	urlGet = strings.Replace(urlGet, "#UID", url.QueryEscape(s), 1)
 	r, err := doGet(urlGet, l)
 	if err != nil {
 		return "", err
 	}
+	defer r.Body.Close()
 	var details *LiveStreamDetails
 	errD := json.NewDecoder(r.Body).Decode(&details)
 	if errD != nil {
@@ -105,8 +96,8 @@ func GetLiveChatIdFromLiveStreamId(s string, l *log.Logger) (string, error) {
 
 }
 
-func GetFristLiveChatIdFromChannelId(c string, l *log.Logger) (string, error) {
-	ids, err := GetLivestreamIdFromChannelId(c, l)
+func GetFristLiveChatIdFromChannelId(c string, key string, l *log.Logger) (string, error) {
+	ids, err := GetLivestreamIdFromChannelId(c, key, l)
 	if err != nil {
 		return "", err
 	}
@@ -114,25 +105,25 @@ func GetFristLiveChatIdFromChannelId(c string, l *log.Logger) (string, error) {
 		l.Println(ErrorNoActiveLivestreams.Error())
 		return "", ErrorNoActiveLivestreams
 	}
-	liveChatId, err2 := GetLiveChatIdFromLiveStreamId(ids[0], l)
+	liveChatId, err2 := GetLiveChatIdFromLiveStreamId(ids[0], key, l)
 	if err2 != nil {
 		return "", err
 	}
 	return liveChatId, nil
 }
 
-func PostComment(message string, chatId string, author string, l *log.Logger) error {
+func PostComment(message string, chatId string, author string, key string, token string, l *log.Logger) error {
 	if message == "" {
 		return errors.New("Yo cant post an empty comment.")
 	}
-	urlPost := urlPostComment + apiKey
+	urlPost := urlPostComment + url.QueryEscape(key)
 	payload := NewCommentToPost(chatId, author, message)
 	bytesM, errM := json.Marshal(payload)
 	if errM != nil {
 		l.Println(ErrorEncoding.Error())
 		return ErrorEncoding
 	}
-	_, err := doPostWithOauth2(urlPost, bytesM, l)
+	_, err := doPostWithOauth2(urlPost, bytesM, token, l)
 	if err != nil {
 		return err
 	}
@@ -140,16 +131,16 @@ func PostComment(message string, chatId string, author string, l *log.Logger) er
 
 }
 
-func ReadMessages(c string, n string, l *log.Logger) (MessageResponse, error) {
+func ReadMessages(c string, n string, key string, l *log.Logger) (MessageResponse, error) {
 	if c == "" {
 		l.Println(ErrorNilChannelID.Error())
 		return MessageResponse{}, ErrorNilChannelID
 	}
-	if apiKey == "" {
+	if key == "" {
 		l.Println(ErrorNoApiKey.Error())
 		return MessageResponse{}, ErrorNoApiKey
 	}
-	urlGet := urlGetMessages + apiKey
+	urlGet := urlGetMessages + url.QueryEscape(key)
 	urlGet = strings.Replace(urlGet, "#UID", url.QueryEscape(c), 1)
 	if n != "" {
 		urlGet = urlGet + pageToken + url.QueryEscape(n)
@@ -158,6 +149,7 @@ func ReadMessages(c string, n string, l *log.Logger) (MessageResponse, error) {
 	if err != nil {
 		return MessageResponse{}, err
 	}
+	defer r.Body.Close()
 	var messages MessageResponse
 	errD := json.NewDecoder(r.Body).Decode(&messages)
 	if errD != nil {
@@ -167,21 +159,22 @@ func ReadMessages(c string, n string, l *log.Logger) (MessageResponse, error) {
 	return messages, nil
 }
 
-func GetUserFromChannelId(c string, l *log.Logger) (string, error) {
+func GetUserFromChannelId(c string, key string, l *log.Logger) (string, error) {
 	if c == "" {
 		l.Println(ErrorNilChannelID.Error())
 		return "", ErrorNilChannelID
 	}
-	if apiKey == "" {
+	if key == "" {
 		l.Println(ErrorNoApiKey.Error())
 		return "", ErrorNoApiKey
 	}
-	urlGet := urlGetUser + apiKey
+	urlGet := urlGetUser + url.QueryEscape(key)
 	urlGet = strings.Replace(urlGet, "#UID", url.QueryEscape(c), 1)
 	r, err := doGet(urlGet, l)
 	if err != nil {
 		return "", err
 	}
+	defer r.Body.Close()
 	var user UserFromChannelResponse
 	errD := json.NewDecoder(r.Body).Decode(&user)
 	if errD != nil {
@@ -195,25 +188,25 @@ func GetUserFromChannelId(c string, l *log.Logger) (string, error) {
 	return user.Items[0].Snippet.Local.Title, nil
 }
 
-func DeleteCommment(cId string, l *log.Logger) error {
+func DeleteCommment(cId string, key string, token string, l *log.Logger) error {
 	if cId == "" {
 		l.Println(ErrorNilCommentID.Error())
 		return ErrorNilCommentID
 	}
-	if apiKey == "" {
+	if key == "" {
 		l.Println(ErrorNoApiKey.Error())
 		return ErrorNoApiKey
 	}
-	urlDelete := urlDeleteComment + apiKey
+	urlDelete := urlDeleteComment + url.QueryEscape(key)
 	urlDelete = strings.Replace(urlDelete, "#UID", url.QueryEscape(cId), 1)
-	err := doDeleteWithOauth2(urlDelete, l)
+	err := doDeleteWithOauth2(urlDelete, token, l)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func BanUser(chatId string, t string, userId string, d int, l *log.Logger) (string, error) {
+func BanUser(chatId string, t string, userId string, d int, key string, token string, l *log.Logger) (string, error) {
 	if chatId == "" {
 		l.Println(ErrorNilLivestreamID.Error())
 		return "", ErrorNilLivestreamID
@@ -226,17 +219,18 @@ func BanUser(chatId string, t string, userId string, d int, l *log.Logger) (stri
 		l.Println(ErrorNilChannelID.Error())
 		return "", ErrorNilChannelID
 	}
-	urlPost := urlBanUser + apiKey
+	urlPost := urlBanUser + url.QueryEscape(key)
 	payload := NewBanResource(chatId, t, d, userId)
 	bytesM, errM := json.Marshal(payload)
 	if errM != nil {
 		l.Println(ErrorEncoding.Error())
 		return "", ErrorEncoding
 	}
-	r, err := doPostWithOauth2(urlPost, bytesM, l)
+	r, err := doPostWithOauth2(urlPost, bytesM, token, l)
 	if err != nil {
 		return "", err
 	}
+	defer r.Body.Close()
 	var ban BanResource
 	errD := json.NewDecoder(r.Body).Decode(&ban)
 	if errD != nil {
@@ -255,6 +249,7 @@ func GetNewAuthToken(cId string, cSec string, ref string, l *log.Logger) (string
 	if err != nil {
 		return "", err
 	}
+	defer res.Body.Close()
 	var token TokenResponse
 	errD := json.NewDecoder(res.Body).Decode(&token)
 	if errD != nil {
@@ -274,7 +269,7 @@ func doGet(u string, l *log.Logger) (*http.Response, error) {
 	}
 }
 
-func doPostWithOauth2(u string, p []byte, l *log.Logger) (*http.Response, error) {
+func doPostWithOauth2(u string, p []byte, token string, l *log.Logger) (*http.Response, error) {
 	head := make(map[string]string)
 	head["Authorization"] = "Bearer " + token
 	r, err := doPost(u, p, head, l)
@@ -301,7 +296,7 @@ func doPost(u string, p []byte, head map[string]string, l *log.Logger) (*http.Re
 	}
 }
 
-func doDeleteWithOauth2(url string, l *log.Logger) error {
+func doDeleteWithOauth2(url string, token string, l *log.Logger) error {
 	head := make(map[string]string)
 	head["Authorization"] = "Bearer " + token
 	_, err := doDelete(url, head, l)

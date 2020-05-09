@@ -6,31 +6,22 @@ import (
 )
 
 const (
-	Version = "1.1.3"
+	Version = "2.0.0"
 )
 
-var Game = ""
+var actions = []string{"response"}
+var username = make(map[string]string)
 
-var admins []string
-var actions = []string{"response", "setupgame"}
-var users = make(map[string]string)
-var quotes = []string{}
-var ThisISBot []string
-var InitialHello string
-
-func SetAdmins(a []string) {
-	admins = a
-}
-
-func IsAdmin(u string) bool {
-	return existsInSlice(u, admins)
-}
-
+//ValidateResponseType returns true if the parameter t is one of the valid action types.
+//Returns false otherwise.
 func ValidateResponseType(t string) bool {
-	return existsInSlice(t, actions)
+	return ExistsInSlice(t, actions)
 }
 
-func existsInSlice(s string, sl []string) bool {
+//ExistsInSlice receives an string and an string slice.
+//Returns true if the string is an elemnt of the slice.
+//Returns false otherwise.
+func ExistsInSlice(s string, sl []string) bool {
 	for _, e := range sl {
 		if s == e {
 			return true
@@ -38,23 +29,20 @@ func existsInSlice(s string, sl []string) bool {
 	}
 	return false
 }
-func AddToUsers(uid string, name string) {
-	users[uid] = name
+
+//AddToUsers adds the userId and name of a user to the username table.
+func AddToUsers(userId string, name string) {
+	username[userId] = name
 }
 
-func GetUserName(uid string) string {
-	return users[uid]
+//GetUserName looks for the userId name in the username table.
+//Uses time.Now().Unix() as seed.
+func GetUserName(userId string) string {
+	return username[userId]
 }
 
-func GetRandomQuote() string {
+//GetRandomElement returns a random element from the provided slice.
+func GetRandomElement(s []string) string {
 	rand.Seed(time.Now().Unix())
-	return quotes[rand.Intn(len(quotes))]
-}
-
-func SetQuotes(q []string) {
-	quotes = q
-}
-
-func IsExcluded(userId string) bool {
-	return existsInSlice(userId, ThisISBot)
+	return s[rand.Intn(len(s))]
 }
