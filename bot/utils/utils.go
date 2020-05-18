@@ -3,13 +3,15 @@ package utils
 import (
 	"math/rand"
 	"time"
+	"unicode"
 )
 
 const (
-	Version = "2.0.0"
+	Version = "2.1.0"
 )
 
 var actions = []string{"response"}
+var penalties = []string{"temporary", "permanent", ""}
 var username = make(map[string]string)
 
 //ValidateResponseType returns true if the parameter t is one of the valid action types.
@@ -45,4 +47,35 @@ func GetUserName(userId string) string {
 func GetRandomElement(s []string) string {
 	rand.Seed(time.Now().Unix())
 	return s[rand.Intn(len(s))]
+}
+
+func ValidateCaps(p float64, min int, msg string) bool {
+	b := true
+	if len(msg) >= min {
+		c := 0
+		l := int(float64(len(msg)) * p)
+		for _, r := range msg {
+			if unicode.IsLetter(r) && unicode.IsUpper(r) {
+				c++
+			}
+			if c >= l {
+				b = false
+				break
+			}
+		}
+	}
+	return b
+}
+
+func MassMatchWords(w []string, s string) bool {
+	for _, word := range w {
+		if MatchWord(word, s) {
+			return true
+		}
+	}
+	return false
+}
+
+func MatchWord(w string, s string) bool {
+	return false
 }

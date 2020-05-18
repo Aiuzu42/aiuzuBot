@@ -12,6 +12,8 @@ type Config struct {
 	Actions       []Action      `json:"actions"`
 	Quotes        []string      `json:"quotes"`
 	InitialHello  string        `json:"initialHello"`
+	InitialActive bool          `json:"initialHelloActive"`
+	Filter        Filters       `json:"filters"`
 }
 
 type Configuration struct {
@@ -33,6 +35,43 @@ type Action struct {
 	UserTimeout   int64    `json:"userTimeout"`
 	GlobalTimeout int64    `json:"globalTimeout"`
 	Admin         bool     `json:"admin"`
+}
+
+type Filters struct {
+	Caps CapsFilter `json:"caps"`
+	Word Words      `json:"words"`
+	Max  MaxLength  `json:"maxLength"`
+}
+
+type CapsFilter struct {
+	Min     int     `json:"min"`
+	Percent float64 `json:"percent"`
+	Active  bool    `json:"active"`
+	Penalty Penalty `json:"penalty"`
+	Message string  `json:"message"`
+}
+
+type Penalty struct {
+	Type     string `json:"type"`
+	Duration int    `json:"duration"`
+}
+
+type Words struct {
+	Active  bool       `json:"active"`
+	BanList []BanWords `json:"banLists"`
+}
+
+type BanWords struct {
+	Words   []string `json:"words"`
+	Penalty Penalty  `json:"penalty"`
+	Message string   `json:"message"`
+}
+
+type MaxLength struct {
+	Active  bool    `json:"active"`
+	Max     int     `json:"max"`
+	Message string  `json:"message"`
+	Penalty Penalty `json:"penalty"`
 }
 
 func LoadConfig() (Config, error) {

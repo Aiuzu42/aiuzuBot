@@ -20,6 +20,39 @@
             "admin" : false
         }
     ],
+    "filters" : {
+        "caps" : {
+            "min" : 0,
+            "percent" : 0,
+            "active" : false,
+            "message" : "",
+            "penalty" : {
+                "type" : "",
+                "duration" : 0
+            }
+        },
+        "words" : {
+            "active" : false,
+            "banLists" : [{
+                "words" : [],
+                "message" : "",
+                "penalty" : {
+                    "type" : "",
+                    "duration" : 0
+                }
+            }]
+        },
+        "maxLength" : {
+            "active" : false,
+            "max" : 0,
+            "message" : "",
+            "penalty" : {
+                "type" : "",
+                "duration" : 0
+            }
+        }
+    },
     "quotes" : [],
-    "initialHello" : ""
+    "initialHello" : "",
+    "initialHelloActive" : false
 }

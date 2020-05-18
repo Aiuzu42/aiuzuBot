@@ -10,21 +10,23 @@ import (
 )
 
 type Bot struct {
-	author       string
-	chatId       string
-	logTo        *log.Logger
-	deactivate   bool
-	looping      bool
-	admins       []string
-	actions      []Action
-	timer        int64
-	filters      bool
-	token        string
-	apiKey       string
-	game         string
-	quotes       []string
-	initialHello string
-	excluded     []string
+	author        string
+	chatId        string
+	logTo         *log.Logger
+	deactivate    bool
+	looping       bool
+	admins        []string
+	actions       []Action
+	timer         int64
+	token         string
+	apiKey        string
+	game          string
+	quotes        []string
+	initialHello  string
+	initialActive bool
+	excluded      []string
+	filters       utils.Filters
+	matcher       []utils.Matcher
 }
 
 //NewBot initializes a Bot struct and sets its values based on the configuration and log provided.
@@ -37,41 +39,47 @@ func NewBot(config utils.Config, log *log.Logger) (Bot, error) {
 		return Bot{}, err
 	}
 	bot := Bot{}
-	err = bot.refreshToken(config.Configuration.ClientId, config.Configuration.ClientS, config.Configuration.Refresh, log)
+	bot.logTo = log
+	err = bot.refreshToken(config.Configuration.ClientId, config.Configuration.ClientS, config.Configuration.Refresh)
 	if err != nil {
 		log.Println("Cant initiate bot since we are unable to get a new token")
 		return Bot{}, err
 	}
 	bot.chatId = chatId
 	bot.author = config.Configuration.AuthorId
-	bot.logTo = log
 	bot.deactivate = false
 	bot.looping = false
 	bot.admins = config.Configuration.Admins
 	bot.timer = 0
-	bot.filters = false
 	bot.apiKey = config.Configuration.ApiKey
 	bot.quotes = config.Quotes
 	bot.initialHello = config.InitialHello
+	bot.initialActive = config.InitialActive
 	bot.excluded = config.Configuration.Excluded
 	bot.excluded = append(bot.excluded, bot.author)
+	bot.filters = config.Filter
 	for _, a := range config.Actions {
 		bot.actions = append(bot.actions,
 			Action{Name: a.Name, Keywords: a.Keywords, Type: a.Type, Message: a.Message, UserTimeout: a.UserTimeout, GlobalTimeout: a.GlobalTimeout, Admin: a.Admin})
+	}
+	for _, b := range bot.filters.Word.BanList {
+		bot.matcher = append(bot.matcher, utils.NewMatcher(b.Words, bot.logTo))
 	}
 	return bot, nil
 }
 
 func (b *Bot) sayInitialHello() error {
-	err := youtubeapi.PostComment(b.initialHello, b.chatId, b.author, b.apiKey, b.token, b.logTo)
-	if err != nil {
-		return err
+	if b.initialActive {
+		err := youtubeapi.PostComment(b.initialHello, b.chatId, b.author, b.apiKey, b.token, b.logTo)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 //Loop is the main function of the bot, it reads and process comments and handle events.
-//If the function has alredy been called and is looping an errro will be returned.
+//If the function has alredy been called and is looping an error will be returned.
 func (b *Bot) Loop() {
 	if b.looping {
 		b.logTo.Println("Alredy looping.")
@@ -101,18 +109,13 @@ func (b *Bot) Loop() {
 			next = m.Next
 			for _, mi := range m.Messages {
 				logMessage(mi, b.logTo)
+				if !b.filter(mi) {
+					continue
+				}
 				for i := range b.actions {
 					if b.actions[i].findKeyword(mi.Snippet.DisplayMessage) {
 						errA := b.executeAction(mi.Snippet.Author, &b.actions[i])
-						if errA != nil && errA == youtubeapi.ErrUnauthorized {
-							errR := b.refreshToken("", "", "", b.logTo)
-							if errR != nil {
-								b.logTo.Println("Cant refresh token")
-							} else {
-								b.logTo.Println("Token refresh succesful")
-							}
-							b.executeAction(mi.Snippet.Author, &b.actions[i])
-						} else if errA != nil {
+						if errA != nil {
 							b.logTo.Println("Error executing action")
 						}
 					}
@@ -147,26 +150,18 @@ func logMessage(m youtubeapi.MessageItem, l *log.Logger) {
 	l.Println("########################################################")
 }
 
-func (b *Bot) postTimedAction() error {
+func (b *Bot) postTimedAction() {
 	msg := utils.GetRandomElement(b.quotes)
-	err := youtubeapi.PostComment(msg, b.chatId, b.author, b.apiKey, b.token, b.logTo)
-	if err != nil && err == youtubeapi.ErrUnauthorized {
-		errR := b.refreshToken("", "", "", b.logTo)
-		if errR != nil {
-			b.logTo.Println("Cant refresh token")
-		} else {
-			b.logTo.Println("Token refresh succesful")
-		}
-		youtubeapi.PostComment(msg, b.chatId, b.author, b.apiKey, b.token, b.logTo)
-	}
+	err := b.responseFunction("", msg)
 	if err != nil {
 		b.logTo.Println("Error posting timed action")
-		return err
 	}
-	return nil
 }
 
-func (b *Bot) refreshToken(clientId string, secret string, refresh string, log *log.Logger) error {
+//refreshToken obtains a new oauth token.
+//All the parameters are optional, if any parameter is an empty string the configuration
+//will be loaded and the parameters will be obtained from there.
+func (b *Bot) refreshToken(clientId string, secret string, refresh string) error {
 	if clientId == "" || secret == "" || refresh == "" {
 		config, errC := utils.LoadConfig()
 		if errC != nil {
@@ -178,7 +173,7 @@ func (b *Bot) refreshToken(clientId string, secret string, refresh string, log *
 		}
 
 	}
-	token, err := youtubeapi.GetNewAuthToken(clientId, secret, refresh, log)
+	token, err := youtubeapi.GetNewAuthToken(clientId, secret, refresh, b.logTo)
 	if err != nil {
 		return err
 	}
@@ -186,6 +181,12 @@ func (b *Bot) refreshToken(clientId string, secret string, refresh string, log *
 	return nil
 }
 
+//executeAction executes the action passed as parameter.
+//Validations are made to ensure that:
+//-The userId is not in the excluded list.
+//-The userId is admin (if it aplies).
+//-The action is not in timeout.
+//After the action is executed the timeouts are updated.
 func (b *Bot) executeAction(userId string, a *Action) error {
 	if utils.ExistsInSlice(userId, b.excluded) {
 		return nil
@@ -202,7 +203,7 @@ func (b *Bot) executeAction(userId string, a *Action) error {
 
 	switch a.Type {
 	case "response":
-		errR := b.responseAction(userId, a)
+		errR := b.responseFunction(userId, a.Message)
 		if errR != nil {
 			return errR
 		}
@@ -218,8 +219,14 @@ func (b *Bot) executeAction(userId string, a *Action) error {
 	return nil
 }
 
-func (b *Bot) responseAction(userId string, a *Action) error {
-	r := a.Message
+//responseFunction is a wrapper function to the PostMessage functionality.
+//It takes as input parameters a userId and a message.
+//This method replaces the bot variables {user} {game} if present with its correspondent values.
+//If the message contains the variable {user} it looks it up in the users table, if its not
+//found it retrieves it with the youtubeapi and updates the table.
+//In case PostComment fails due to authorization issues, an attempt is made to refresh the
+//token and if its successful, a second attempt is made to PostComment.
+func (b *Bot) responseFunction(userId string, r string) error {
 	if strings.Contains(r, "{user}") {
 		uname := utils.GetUserName(userId)
 		if uname == "" {
@@ -237,8 +244,115 @@ func (b *Bot) responseAction(userId string, a *Action) error {
 		r = strings.ReplaceAll(r, "{game}", b.game)
 	}
 	err := youtubeapi.PostComment(r, b.chatId, b.author, b.apiKey, b.token, b.logTo)
-	if err != nil {
+	if err != nil && err == youtubeapi.ErrUnauthorized {
+		errR := b.refreshToken("", "", "")
+		if errR != nil {
+			b.logTo.Println("Cant refresh token")
+			return err
+		} else {
+			b.logTo.Println("Token refresh succesful")
+			youtubeapi.PostComment(r, b.chatId, b.author, b.apiKey, b.token, b.logTo)
+		}
+	} else if err != nil {
 		return err
 	}
 	return nil
+}
+
+//deleteFunction is a wrapper function to the DeleteCommment functionality.
+//It takes as input parameters a messageId to delete.
+//In case DeleteCommment fails due to authorization issues, an attempt is made to refresh the
+//token and if its successful, a second attempt is made to DeleteCommment.
+func (b *Bot) deleteFunction(msgId string) error {
+	err := youtubeapi.DeleteCommment(msgId, b.apiKey, b.token, b.logTo)
+	if err != nil && err == youtubeapi.ErrUnauthorized {
+		errR := b.refreshToken("", "", "")
+		if errR != nil {
+			b.logTo.Println("Cant refresh token")
+			return err
+		} else {
+			b.logTo.Println("Token refresh succesful")
+			youtubeapi.DeleteCommment(msgId, b.apiKey, b.token, b.logTo)
+		}
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+//penaltyFunction is a wrapper function to the BanUser functionality.
+//It takes as input parameters a userId to ban, the type t of ban, and a duration d.
+//The banId returned by the api is logged to the the bot logger.
+//If the type is youtubeapi.permanent_ban the duration is not used.
+//In case BanUser fails due to authorization issues, an attempt is made to refresh the
+//token and if its successful, a second attempt is made to BanUser.
+func (b *Bot) penaltyFunction(userId string, t string, d int) error {
+	banId, err := youtubeapi.BanUser(b.chatId, t, userId, d, b.apiKey, b.token, b.logTo)
+	if err != nil && err == youtubeapi.ErrUnauthorized {
+		errR := b.refreshToken("", "", "")
+		if errR != nil {
+			b.logTo.Println("Cant refresh token")
+			return err
+		} else {
+			b.logTo.Println("Token refresh succesful")
+			banId, _ = youtubeapi.BanUser(b.chatId, t, userId, d, b.apiKey, b.token, b.logTo)
+		}
+	} else if err != nil {
+		b.logTo.Println("Cant ban user " + userId)
+		return err
+	}
+	b.logTo.Println("User " + userId + " was succesfully banned with banId " + banId)
+	return nil
+}
+
+func (b *Bot) filter(msg youtubeapi.MessageItem) bool {
+	res := true
+	if utils.ExistsInSlice(msg.Snippet.Author, b.admins) {
+		return res
+	}
+	if b.filters.Caps.Active {
+		res = utils.ValidateCaps(b.filters.Caps.Percent, b.filters.Caps.Min, msg.Snippet.DisplayMessage)
+		if !res {
+			b.logTo.Printf("Message [%s] didnt pass caps validation", msg.Snippet.DisplayMessage)
+			b.deleteFunction(msg.Id)
+			if b.filters.Caps.Penalty.Type != "" {
+				b.logTo.Printf("A caps penalty was applied for message [%s]", msg.Snippet.DisplayMessage)
+				b.penaltyFunction(msg.Snippet.Author, b.filters.Caps.Penalty.Type, b.filters.Caps.Penalty.Duration)
+			}
+			b.logTo.Printf("A response was send for message [%s]", msg.Snippet.DisplayMessage)
+			b.responseFunction(msg.Snippet.Author, b.filters.Caps.Message)
+			return res
+		}
+	}
+	if b.filters.Word.Active {
+		b.logTo.Printf("the length is: %v", len(b.filters.Word.BanList))
+		for i, w := range b.filters.Word.BanList {
+			found := b.matcher[i].Match(msg.Snippet.DisplayMessage)
+			if found {
+				b.logTo.Printf("Message [%s] didnt pass words validation", msg.Snippet.DisplayMessage)
+				b.deleteFunction(msg.Id)
+				if w.Penalty.Type != "" {
+					b.logTo.Printf("A words penalty was applied for message [%s]", msg.Snippet.DisplayMessage)
+					b.penaltyFunction(msg.Snippet.Author, w.Penalty.Type, w.Penalty.Duration)
+				}
+				b.logTo.Printf("A response was send for message [%s]", msg.Snippet.DisplayMessage)
+				b.responseFunction(msg.Snippet.Author, w.Message)
+				return false
+			}
+		}
+	}
+	if b.filters.Max.Active {
+		if len(msg.Snippet.DisplayMessage) >= b.filters.Max.Max {
+			b.logTo.Printf("Message [%s] didnt pass length validation", msg.Snippet.DisplayMessage)
+			b.deleteFunction(msg.Id)
+			if b.filters.Max.Penalty.Type != "" {
+				b.logTo.Printf("A length penalty was applied for message [%s]", msg.Snippet.DisplayMessage)
+				b.penaltyFunction(msg.Snippet.Author, b.filters.Max.Penalty.Type, b.filters.Max.Penalty.Duration)
+			}
+			b.logTo.Printf("A response was send for message [%s]", msg.Snippet.DisplayMessage)
+			b.responseFunction(msg.Snippet.Author, b.filters.Max.Message)
+			return false
+		}
+	}
+	return res
 }
