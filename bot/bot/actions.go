@@ -20,6 +20,7 @@ type Action struct {
 	Admin         bool
 	LastCalled    int64
 	UserList      map[string]int64
+	Uses          int
 }
 
 //reaminingTimeout calculates how many seconds until an action can be called again.
@@ -57,4 +58,15 @@ func (a *Action) findKeyword(msg string) bool {
 		}
 	}
 	return false
+}
+
+func (a *Action) validateUses() bool {
+	if a.Uses < 0 {
+		return true
+	} else if a.Uses == 0 {
+		return false
+	} else {
+		a.Uses = a.Uses - 1
+		return true
+	}
 }

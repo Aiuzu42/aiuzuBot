@@ -17,7 +17,8 @@
             "message" : "",
             "userTimeout" : 0,
             "globalTimeout" : 0,
-            "admin" : false
+            "admin" : false,
+            "uses" : 0
         }
     ],
     "filters" : {
@@ -52,7 +53,11 @@
             }
         }
     },
-    "quotes" : [],
-    "initialHello" : "",
-    "initialHelloActive" : false
+    "timed" : [{
+        "name" : "",
+        "type" : "",
+        "cooldown" : 0,
+        "messages" : []
+    }
+]
 }

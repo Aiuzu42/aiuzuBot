@@ -11,9 +11,8 @@ type Config struct {
 	Configuration Configuration `json:"configuration"`
 	Actions       []Action      `json:"actions"`
 	Quotes        []string      `json:"quotes"`
-	InitialHello  string        `json:"initialHello"`
-	InitialActive bool          `json:"initialHelloActive"`
 	Filter        Filters       `json:"filters"`
+	Timed         []TimedAction `json:"timed"`
 }
 
 type Configuration struct {
@@ -35,6 +34,7 @@ type Action struct {
 	UserTimeout   int64    `json:"userTimeout"`
 	GlobalTimeout int64    `json:"globalTimeout"`
 	Admin         bool     `json:"admin"`
+	Uses          int      `json:"uses"`
 }
 
 type Filters struct {
@@ -72,6 +72,13 @@ type MaxLength struct {
 	Max     int     `json:"max"`
 	Message string  `json:"message"`
 	Penalty Penalty `json:"penalty"`
+}
+
+type TimedAction struct {
+	Name     string   `json:"name"`
+	Type     string   `json:"type"`
+	Cooldown int64    `json:"cooldown"`
+	Messages []string `json:"messages"`
 }
 
 func LoadConfig() (Config, error) {

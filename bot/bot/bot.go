@@ -10,23 +10,54 @@ import (
 )
 
 type Bot struct {
-	author        string
-	chatId        string
-	logTo         *log.Logger
-	deactivate    bool
-	looping       bool
-	admins        []string
-	actions       []Action
-	timer         int64
-	token         string
-	apiKey        string
-	game          string
-	quotes        []string
-	initialHello  string
-	initialActive bool
-	excluded      []string
-	filters       utils.Filters
-	matcher       []utils.Matcher
+	//The id of the account used by the bot.
+	author string
+
+	//The Id of the chat the bot is in.
+	chatId string
+
+	//A pointer to a logger
+	logTo *log.Logger
+
+	//Boolean variable to deactive the main loop
+	deactivate bool
+
+	//A variable that indicates that the loop function is alredy running
+	looping bool
+
+	//A string slice containing a list of admin users id
+	admins []string
+
+	//A slice of actions configured for the bot
+	actions []Action
+
+	//A timer for the timed actions
+	timer int64
+
+	//Token for oauth youtube connection
+	token string
+
+	//ApiKey for youtube connection
+	apiKey string
+
+	//Current game being played
+	game string
+
+	//A slice of quotes for timed actions
+	quotes []string
+
+	//List of users excluded by the bot responses
+	excluded []string
+
+	//Message filters configurations
+	filters utils.Filters
+
+	//Regular expressions used by the bot filters
+	matcher []utils.Matcher
+
+	timed []TimedAction
+
+	onFirstMessages bool
 }
 
 //NewBot initializes a Bot struct and sets its values based on the configuration and log provided.
@@ -53,29 +84,21 @@ func NewBot(config utils.Config, log *log.Logger) (Bot, error) {
 	bot.timer = 0
 	bot.apiKey = config.Configuration.ApiKey
 	bot.quotes = config.Quotes
-	bot.initialHello = config.InitialHello
-	bot.initialActive = config.InitialActive
 	bot.excluded = config.Configuration.Excluded
 	bot.excluded = append(bot.excluded, bot.author)
 	bot.filters = config.Filter
+	bot.onFirstMessages = false
 	for _, a := range config.Actions {
 		bot.actions = append(bot.actions,
-			Action{Name: a.Name, Keywords: a.Keywords, Type: a.Type, Message: a.Message, UserTimeout: a.UserTimeout, GlobalTimeout: a.GlobalTimeout, Admin: a.Admin})
+			Action{Name: a.Name, Keywords: a.Keywords, Type: a.Type, Message: a.Message, UserTimeout: a.UserTimeout, GlobalTimeout: a.GlobalTimeout, Admin: a.Admin, Uses: a.Uses})
 	}
 	for _, b := range bot.filters.Word.BanList {
 		bot.matcher = append(bot.matcher, utils.NewMatcher(b.Words, bot.logTo))
 	}
-	return bot, nil
-}
-
-func (b *Bot) sayInitialHello() error {
-	if b.initialActive {
-		err := youtubeapi.PostComment(b.initialHello, b.chatId, b.author, b.apiKey, b.token, b.logTo)
-		if err != nil {
-			return err
-		}
+	for _, t := range config.Timed {
+		bot.timed = append(bot.timed, TimedAction{Name: t.Name, Type: t.Type, Cooldown: t.Cooldown, Messages: t.Messages})
 	}
-	return nil
+	return bot, nil
 }
 
 //Loop is the main function of the bot, it reads and process comments and handle events.
@@ -86,13 +109,11 @@ func (b *Bot) Loop() {
 		return
 	}
 
-	errH := b.sayInitialHello()
-	if errH != nil {
-		b.logTo.Println("Cant say hello")
-	}
+	b.executeTimed("first")
 
 	b.looping = true
 	b.deactivate = false
+	b.onFirstMessages = true
 
 	next := ""
 
@@ -120,17 +141,18 @@ func (b *Bot) Loop() {
 						}
 					}
 				}
+				if b.onFirstMessages {
+					b.executeTimed("onFirstMessages")
+					b.onFirstMessages = false
+				}
 			}
 		}
-		now := time.Now().Unix()
-		if now >= b.timer+720 {
-			b.timer = now
-			b.postTimedAction()
-		}
+		b.executeTimed("timed")
 		time.Sleep(10 * time.Second)
 	}
 	b.deactivate = true
 	b.looping = false
+	b.executeTimed("ending")
 }
 
 //DeactivateLoop stops this bot loop.
@@ -196,6 +218,10 @@ func (b *Bot) executeAction(userId string, a *Action) error {
 		return ErrNotAuthorized
 	} else if a.Admin && utils.ExistsInSlice(userId, b.admins) {
 		b.logTo.Printf("User: %s is executing the admin command %s", userId, a.Name)
+	}
+	if !a.validateUses() {
+		b.logTo.Println("An action was attemted but it had no more uses")
+		return nil
 	}
 	if errT := a.validateTimeout(userId, time.Now().Unix(), b.logTo); errT != nil {
 		return nil
@@ -325,7 +351,6 @@ func (b *Bot) filter(msg youtubeapi.MessageItem) bool {
 		}
 	}
 	if b.filters.Word.Active {
-		b.logTo.Printf("the length is: %v", len(b.filters.Word.BanList))
 		for i, w := range b.filters.Word.BanList {
 			found := b.matcher[i].Match(msg.Snippet.DisplayMessage)
 			if found {
@@ -355,4 +380,20 @@ func (b *Bot) filter(msg youtubeapi.MessageItem) bool {
 		}
 	}
 	return res
+}
+
+func (b *Bot) executeTimed(t string) {
+	now := time.Now().Unix()
+	for i := range b.timed {
+		if b.timed[i].Type == t && b.timed[i].Type == "timed" {
+			rem := remainingTimeout(now, b.timed[i].Cooldown, b.timed[i].LastCalled)
+			if rem <= 0 {
+				b.responseFunction("", utils.GetRandomElement(b.timed[i].Messages))
+				b.timed[i].LastCalled = now
+			}
+		} else if b.timed[i].Type == t {
+			b.responseFunction("", utils.GetRandomElement(b.timed[i].Messages))
+			b.timed[i].LastCalled = now
+		}
+	}
 }
