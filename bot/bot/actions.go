@@ -11,16 +11,16 @@ var ErrNotAuthorized = errors.New("Not authorized to run that command.")
 var ErrActionTypeNotFound = errors.New("The action type is not valid.")
 
 type Action struct {
-	Name          string
-	Keywords      []string
-	Type          string
-	Message       string
-	UserTimeout   int64
-	GlobalTimeout int64
-	Admin         bool
-	LastCalled    int64
-	UserList      map[string]int64
-	Uses          int
+	Name          string           `json:"name"`
+	Keywords      []string         `json:"keywords"`
+	Type          string           `json:"type"`
+	Message       string           `json:"message"`
+	UserTimeout   int64            `json:"userTimeout"`
+	GlobalTimeout int64            `json:"globalTimeout"`
+	Admin         bool             `json:"admin"`
+	Uses          int              `json:"uses"`
+	LastCalled    int64            `json:"-"`
+	UserList      map[string]int64 `json:"-"`
 }
 
 //reaminingTimeout calculates how many seconds until an action can be called again.

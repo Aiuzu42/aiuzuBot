@@ -1,4 +1,6 @@
 {
+    "botId" : "",
+    "type" : "",
     "configuration" : {
         "apiKey" : "",
         "refresh" : "",
@@ -58,6 +60,5 @@
         "type" : "",
         "cooldown" : 0,
         "messages" : []
-    }
-]
+    }]
 }

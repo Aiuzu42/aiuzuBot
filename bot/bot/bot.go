@@ -2,6 +2,7 @@ package bot
 
 import (
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 )
 
 type Bot struct {
+	BotId string
+
 	//The id of the account used by the bot.
 	author string
 
@@ -50,7 +53,7 @@ type Bot struct {
 	excluded []string
 
 	//Message filters configurations
-	filters utils.Filters
+	filters Filters
 
 	//Regular expressions used by the bot filters
 	matcher []utils.Matcher
@@ -63,19 +66,25 @@ type Bot struct {
 //NewBot initializes a Bot struct and sets its values based on the configuration and log provided.
 //It obtains the liveChatId and a refreshToken from the youtube API.
 //If an error ocurrs while obtaining data from the youtube API, an zero value Bot is returned with an error.
-func NewBot(config utils.Config, log *log.Logger) (Bot, error) {
-	chatId, err := youtubeapi.GetFristLiveChatIdFromChannelId(config.Configuration.LiveStreamChannelId, config.Configuration.ApiKey, log)
+func NewBot(config LocalConfig, liveId string, log *log.Logger) (Bot, error) {
+	var chatId string
+	var err error
+	if liveId == "" {
+		chatId, err = youtubeapi.GetFristLiveChatIdFromChannelId(config.Configuration.LiveStreamChannelId, config.Configuration.ApiKey, log)
+	} else {
+		chatId, err = youtubeapi.GetLiveChatIdFromLiveStreamId(liveId, config.Configuration.ApiKey, log)
+	}
 	if err != nil {
 		log.Println("Cant initiate bot since the channel doesnt have an active livestream")
 		return Bot{}, err
 	}
 	bot := Bot{}
-	bot.logTo = log
 	err = bot.refreshToken(config.Configuration.ClientId, config.Configuration.ClientS, config.Configuration.Refresh)
 	if err != nil {
 		log.Println("Cant initiate bot since we are unable to get a new token")
 		return Bot{}, err
 	}
+	bot.BotId = config.BotId
 	bot.chatId = chatId
 	bot.author = config.Configuration.AuthorId
 	bot.deactivate = false
@@ -105,8 +114,18 @@ func NewBot(config utils.Config, log *log.Logger) (Bot, error) {
 //If the function has alredy been called and is looping an error will be returned.
 func (b *Bot) Loop() {
 	if b.looping {
-		b.logTo.Println("Alredy looping.")
 		return
+	}
+
+	now := time.Now()
+	fileName := b.BotId + now.Format("020120061504") + ".txt"
+	f, errF := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if errF != nil {
+		b.logTo = log.New(os.Stdout, "[aiuzuBot] ", log.LstdFlags)
+		b.logTo.Println("Error reading log file.")
+	} else {
+		defer f.Close()
+		b.logTo = log.New(f, "[aiuzuBot] ", log.LstdFlags)
 	}
 
 	b.executeTimed("first")
@@ -150,6 +169,7 @@ func (b *Bot) Loop() {
 		b.executeTimed("timed")
 		time.Sleep(10 * time.Second)
 	}
+	b.logTo.Println("We are out of the loop")
 	b.deactivate = true
 	b.looping = false
 	b.executeTimed("ending")
@@ -157,7 +177,12 @@ func (b *Bot) Loop() {
 
 //DeactivateLoop stops this bot loop.
 func (b *Bot) DeactivateLoop() {
+	b.logTo.Println("Deactivating loop")
 	b.deactivate = true
+	for b.looping {
+		time.Sleep(1 * time.Second)
+	}
+	b.logTo.Println("Loop deactivated")
 }
 
 //UpdateGame is used to update the name of the current game in the livestream.
@@ -185,7 +210,7 @@ func (b *Bot) postTimedAction() {
 //will be loaded and the parameters will be obtained from there.
 func (b *Bot) refreshToken(clientId string, secret string, refresh string) error {
 	if clientId == "" || secret == "" || refresh == "" {
-		config, errC := utils.LoadConfig()
+		config, errC := loadLocalConfig(b.BotId, b.logTo)
 		if errC != nil {
 			return errC
 		} else {

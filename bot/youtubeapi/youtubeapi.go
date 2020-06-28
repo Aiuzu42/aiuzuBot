@@ -274,7 +274,6 @@ func doPostWithOauth2(u string, p []byte, token string, l *log.Logger) (*http.Re
 	head["Authorization"] = "Bearer " + token
 	r, err := doPost(u, p, head, l)
 	if err != nil {
-		l.Println(token)
 		return nil, err
 	}
 	return r, nil
