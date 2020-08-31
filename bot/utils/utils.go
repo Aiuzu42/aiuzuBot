@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	Version = "3.0.0"
+	Version = "3.0.1"
 )
 
 var actions = []string{"response"}

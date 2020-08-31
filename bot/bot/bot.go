@@ -104,8 +104,9 @@ func NewBot(config LocalConfig, liveId string, log *log.Logger) (Bot, error) {
 	for _, b := range bot.filters.Word.BanList {
 		bot.matcher = append(bot.matcher, utils.NewMatcher(b.Words, bot.logTo))
 	}
+	now := time.Now().Unix()
 	for _, t := range config.Timed {
-		bot.timed = append(bot.timed, TimedAction{Name: t.Name, Type: t.Type, Cooldown: t.Cooldown, Messages: t.Messages})
+		bot.timed = append(bot.timed, TimedAction{Name: t.Name, Type: t.Type, Cooldown: t.Cooldown, Messages: t.Messages, LastCalled: now})
 	}
 	return bot, nil
 }
@@ -133,23 +134,29 @@ func (b *Bot) Loop() {
 	b.looping = true
 	b.deactivate = false
 	b.onFirstMessages = true
+	tooManyMessages := false
 
 	next := ""
 
 	b.timer = time.Now().Unix()
 
 	for !b.deactivate {
+		tooManyMessages = false
 		m, err := youtubeapi.ReadMessages(b.chatId, next, b.apiKey, b.logTo)
 		if err != nil {
 			b.logTo.Println("There was an error attempting to read messages.")
-		} else if m.Info.Total > 20 {
-			b.logTo.Println("Too many messages, nothing to do this cycle")
-			next = m.Next
 		} else {
+			if m.Info.Total > 20 {
+				b.logTo.Println("Too many messages, nothing to do this cycle")
+				tooManyMessages = true
+			}
 			next = m.Next
 			for _, mi := range m.Messages {
 				logMessage(mi, b.logTo)
 				if !b.filter(mi) {
+					continue
+				}
+				if tooManyMessages || b.onFirstMessages {
 					continue
 				}
 				for i := range b.actions {
@@ -160,11 +167,11 @@ func (b *Bot) Loop() {
 						}
 					}
 				}
-				if b.onFirstMessages {
-					b.executeTimed("onFirstMessages")
-					b.onFirstMessages = false
-				}
 			}
+		}
+		if b.onFirstMessages {
+			b.executeTimed("onFirstMessages")
+			b.onFirstMessages = false
 		}
 		b.executeTimed("timed")
 		time.Sleep(10 * time.Second)
