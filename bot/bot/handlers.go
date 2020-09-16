@@ -23,7 +23,8 @@ func (bh *BotHandler) SimpleBotListEndpoint(w http.ResponseWriter, r *http.Reque
 func (bh *BotHandler) StartBotEndpoint(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	liveId := r.URL.Query().Get("liveId")
-	err := bh.startBot(params["botid"], liveId)
+	game := r.URL.Query().Get("game")
+	err := bh.startBot(params["botid"], liveId, game)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(responseError{Message: err.Error()})

@@ -80,7 +80,7 @@ func (bh *BotHandler) getGame(botId string) (string, error) {
 	return "", ErrorFindingBot
 }
 
-func (bh *BotHandler) startBot(botId string, liveId string) error {
+func (bh *BotHandler) startBot(botId string, liveId string, game string) error {
 	bh.logTo.Println("We just enter startBot")
 	if !bh.doesBotExists(botId) {
 		bh.logTo.Println("The bot you want to start does not exists: " + botId)
@@ -103,6 +103,9 @@ func (bh *BotHandler) startBot(botId string, liveId string) error {
 	bh.bots = append(bh.bots, bot)
 	go bh.bots[len(bh.bots)-1].Loop()
 	bh.logTo.Println("We are about to exit startBot")
+	if game != "" {
+		bh.updateGame(botId, game)
+	}
 	return nil
 }
 
