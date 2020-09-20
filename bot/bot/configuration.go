@@ -33,6 +33,23 @@ type LocalConfig struct {
 	Quotes        []string      `json:"quotes"`
 	Filter        Filters       `json:"filters"`
 	Timed         []TimedAction `json:"timed"`
+	Raffle        RaffleDetails `json:"raffle"`
+}
+
+type RaffleDetails struct {
+	Command       string   `json:"command"`
+	Message       string   `json:"message"`
+	Enter         string   `json:"enter"`
+	DefaultTime   int64    `json:"defaultTime"`
+	FinishMessage string   `json:"finishMessage"`
+	StartMessage  string   `json:"startMessage"`
+	Prize         string   `json:"prize"`
+	Active        bool     `json:"active"`
+	Participants  []string `json:"-"`
+	CustomTime    int64    `json:"-"`
+	PrizeAmount   string   `json:"-"`
+	FinishTime    int64    `json:"-"`
+	Winner        string   `json:"-"`
 }
 
 type Configuration struct {

@@ -23,6 +23,15 @@
             "uses" : 0
         }
     ],
+    "raffle" : {
+        "command" :"",
+        "message" : "",
+        "enter" : "",
+        "defaultTime" : 0,
+        "finishMessage" : "",
+        "startMessage" : "",
+        "prize" : ""
+    },
     "filters" : {
         "caps" : {
             "min" : 0,

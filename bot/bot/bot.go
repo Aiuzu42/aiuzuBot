@@ -3,6 +3,7 @@ package bot
 import (
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,6 +62,8 @@ type Bot struct {
 	timed []TimedAction
 
 	onFirstMessages bool
+
+	raffle RaffleDetails
 }
 
 //NewBot initializes a Bot struct and sets its values based on the configuration and log provided.
@@ -97,6 +100,8 @@ func NewBot(config LocalConfig, liveId string, log *log.Logger) (Bot, error) {
 	bot.excluded = append(bot.excluded, bot.author)
 	bot.filters = config.Filter
 	bot.onFirstMessages = false
+	bot.raffle = config.Raffle
+	bot.raffle.Active = false
 	for _, a := range config.Actions {
 		bot.actions = append(bot.actions,
 			Action{Name: a.Name, Keywords: a.Keywords, Type: a.Type, Message: a.Message, UserTimeout: a.UserTimeout, GlobalTimeout: a.GlobalTimeout, Admin: a.Admin, Uses: a.Uses})
@@ -151,12 +156,23 @@ func (b *Bot) Loop() {
 				tooManyMessages = true
 			}
 			next = m.Next
+			if b.raffle.Active {
+				b.endRaffle()
+			}
 			for _, mi := range m.Messages {
 				logMessage(mi, b.logTo)
 				if !b.filter(mi) {
 					continue
 				}
 				if tooManyMessages || b.onFirstMessages {
+					continue
+				}
+				if !b.raffle.Active && strings.HasPrefix(mi.Snippet.DisplayMessage, b.raffle.Command) {
+					b.initRaffle(mi)
+					continue
+				}
+				if b.raffle.Active && mi.Snippet.DisplayMessage == b.raffle.Enter {
+					b.addToRaffle(mi.Snippet.Author)
 					continue
 				}
 				for i := range b.actions {
@@ -428,4 +444,66 @@ func (b *Bot) executeTimed(t string) {
 			b.timed[i].LastCalled = now
 		}
 	}
+}
+
+func (b *Bot) initRaffle(mi youtubeapi.MessageItem) {
+	now := time.Now().Unix()
+	b.raffle.Winner = ""
+	b.raffle.Participants = []string{}
+	if !utils.ExistsInSlice(mi.Snippet.Author, b.admins) {
+		return
+	}
+	parts := strings.Split(mi.Snippet.DisplayMessage, " ")
+	l := len(parts)
+	if l < 2 || l > 3 {
+		return
+	}
+	b.raffle.PrizeAmount = parts[1]
+	if l == 3 {
+		ct, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil {
+			return
+		}
+		b.raffle.CustomTime = ct
+	} else {
+		b.raffle.CustomTime = b.raffle.DefaultTime
+	}
+	b.raffle.FinishTime = now + b.raffle.CustomTime
+	b.raffle.Active = true
+	stMessage := strings.ReplaceAll(b.raffle.StartMessage, "{raffleReward}", b.raffle.PrizeAmount)
+	stMessage = strings.ReplaceAll(stMessage, "{enterRaffle}", b.raffle.Enter)
+	b.responseFunction(mi.Snippet.Author, stMessage)
+}
+
+func (b *Bot) addToRaffle(u string) {
+	for i := range b.raffle.Participants {
+		if u == b.raffle.Participants[i] {
+			return
+		}
+	}
+	b.raffle.Participants = append(b.raffle.Participants, u)
+	err := b.responseFunction(u, b.raffle.Message)
+	if err != nil {
+		b.logTo.Println(err.Error())
+	}
+}
+
+func (b *Bot) endRaffle() {
+	now := time.Now().Unix()
+	if now < b.raffle.FinishTime {
+		return
+	}
+	if b.raffle.Winner == "" {
+		b.raffle.Winner = utils.GetRandomElement(b.raffle.Participants)
+	}
+	err := b.responseFunction(b.raffle.Winner, b.raffle.FinishMessage)
+	if err != nil {
+		return
+	}
+	r := strings.ReplaceAll(b.raffle.Prize, "{raffleReward}", b.raffle.PrizeAmount)
+	err = b.responseFunction(b.raffle.Winner, r)
+	if err != nil {
+		return
+	}
+	b.raffle.Active = false
 }
